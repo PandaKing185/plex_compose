@@ -1,0 +1,217 @@
+---
+# docker-compose -f ~/docker/docker-compose.yml up -d
+networks:
+  internal:
+    driver: bridge
+
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=Europe/London
+    ports:
+      - "${PORT:-8191}:8191"
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${USERDIR}/docker/bazarr/config:/config
+      - /data:/data
+      - /logs:/logs
+      # ADD ADDITIONAL HARD DRIVE MOUNT POINTS HERE
+    ports:
+      - 6767:6767
+    restart: unless-stopped
+
+  qbittorrent-vpn:
+    image: dyonr/qbittorrentvpn
+    container_name: qbittorrent-vpn
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      - VPN_ENABLED=yes
+      - VPN_TYPE=openvpn
+      - LAN_NETWORK=10.0.0.0/8
+      - VPN_USERNAME=
+      - VPN_PASSWORD=
+    ports:
+      - 8081:8080
+    volumes:
+      - ${USERDIR}/docker/qbittorrent-vpn:/config
+      - /data/downloads:/data/downloads
+      - /logs:/logs
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${USERDIR}/docker/sabnzbd/config:/config
+      - /data/downloads/complete:/data/downloads/complete #optional
+      - /data/downloads/incomplete:/data/downloads/incomplete #optional
+      - /logs:/logs
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+
+  plexms:
+    container_name: plexms
+    restart: always
+    image: plexinc/pms-docker
+    volumes:
+      - ${USERDIR}/docker/plexms:/config
+      - ${USERDIR}/downloads/plex_tmp:/transcode
+      - /media/media:/media
+      - ${USERDIR}/docker/certs:/certs
+      - /data/media:/data
+      - "/logs/plexms:/config/Library/Application Support/Plex Media Server/Logs"
+    network_mode: host
+    environment:
+      - TZ=${TZ}
+      - HOSTNAME="10.0.10.1"
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - PLEX_UID=${PUID}
+      - PLEX_GID=${PGID}
+      - ADVERTISE_IP=${PLEX_ADVERTISE_IP}
+
+  tautulli:
+    image: ghcr.io/tautulli/tautulli:latest
+    container_name: tautulli
+    restart: always
+    volumes:
+      - ${USERDIR}/docker/plexpy:/config
+      - /var/log/plexpy:/logs:ro
+      - ${USERDIR}/docker/certs:/certs
+      - /logs/tautulli:/config/logs
+    ports:
+      - "8181:8181"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+
+  caddy:
+    image: caddy:latest
+    container_name: "caddy"
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${USERDIR}/docker/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ${USERDIR}/docker/caddy/data:/data
+      - ${USERDIR}/docker/caddy/config:/config
+      - /logs:/logs
+
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: "sonarr"
+    volumes:
+      - /opt/appdata/sma:/usr/local/sma/config
+      - ${USERDIR}/docker/sonarr:/config
+      - /data/:/data/
+      - "/etc/localtime:/etc/localtime:ro"
+      - ${USERDIR}/docker/certs:/certs
+      - /logs/sonarr:/config/logs
+    ports:
+        - "8989:8989"
+    restart: always
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: "radarr"
+    volumes:
+      - /opt/appdata/sma:/usr/local/sma/config
+      - ${USERDIR}/docker/radarr:/config
+      - "/etc/localtime:/etc/localtime:ro"
+      - ${USERDIR}/docker/certs:/certs
+      - /data/:/data/
+      - /logs/radarr:/config/logs
+    ports:
+      - "7878:7878"
+    restart: always
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /home/docker/docker/overseer/config:/config
+      - /logs/overseerr:/config/logs
+    ports:
+      - 5055:5055
+    restart: unless-stopped
+
+  plex-meta-manager:
+    image: lscr.io/linuxserver/plex-meta-manager:latest
+    container_name: plex-meta-manager
+    environment:
+      - PMM_CONFIG=/config/config.yml #optional
+      - PMM_TIME=03:00 #optional
+      - PMM_RUN=False #optional
+      - PMM_TEST=False #optional
+      - PMM_NO_MISSING=False #optional
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${USERDIR}/docker/plex-meta-manager/config:/config
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${USERDIR}/docker/prowlarr:/config
+      - /logs/prowlarr:/config/logs
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+    
+  watchtower:
+    container_name: watchtower
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 8082:8080
+    command: --http-api-metrics --log-level debug
+    environment:
+      - WATCHTOWER_HTTP_API_TOKEN=
+    restart: unless-stopped
+    
+volumes:
+  caddy_data:
+  caddy_config:
